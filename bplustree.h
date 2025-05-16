@@ -30,7 +30,7 @@ struct Node {
     // bool dirty; // Isso será gerenciado pela classe BPlusTree para o nó em buffer
 
     Node(int m, bool leaf, int nodeId = 0)
-        : id(nodeId), isLeaf(leaf), numKeys(0), order(m), prevLeafId(0), nextLeafId(0) {
+        : id(nodeId), isLeaf(leaf), numKeys(0), prevLeafId(0), nextLeafId(0), order(m){
         // Máximo de chaves é order-1. Reserva espaço, +1 para estouro temporário durante a divisão.
         keys.reserve(m); 
         if (isLeaf) {

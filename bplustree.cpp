@@ -1,7 +1,11 @@
 #include "bplustree.h"
-#include <filesystem> // Para std::filesystem::file_size
+#include <filesystem> // Para filesystem::file_size
 #include <limits>
+#include <cmath> // Para ceil
 
+#define HEADER_LINES 2
+
+using namespace std;
 /**
  * Construtor da classe BPlusTree.
  * Inicializa a árvore B+, define sua ordem, os nomes dos arquivos de índice e
@@ -11,8 +15,8 @@
  * que armazenará o índice da árvore B+ dataFileName O nome do arquivo CSV que
  * contém os dados a serem indexados (vinhos.csv)
  */
-BPlusTree::BPlusTree(int order, const std::string &indexFileName,
-                     const std::string &dataFileName)
+BPlusTree::BPlusTree(int order, const string &indexFileName,
+                     const string &dataFileName)
     : treeOrder(order), rootNodeId(0), indexFilePath(indexFileName),
       dataFilePath(dataFileName),
       nextNodeIdCounter(
@@ -30,13 +34,13 @@ BPlusTree::BPlusTree(int order, const std::string &indexFileName,
                          // cabeçalho básico.
 
   // Tenta ler o ID da raiz do arquivo de índice.
-  std::string rootLine = readLineFromFile(indexFilePath, 1);
+  string rootLine = readLineFromFile(indexFilePath, 1);
   if (!rootLine.empty() &&
       rootLine.rfind("ROOT_ID:", 0) == 0) { // rfind para verificar o prefixo
     try {
-      rootNodeId = std::stoi(rootLine.substr(8)); // Extrai o ID após "ROOT_ID:"
-    } catch (const std::exception &e) {
-      std::cerr << "Erro ao analisar ROOT_ID: " << e.what() << std::endl;
+      rootNodeId = stoi(rootLine.substr(8)); // Extrai o ID após "ROOT_ID:"
+    } catch (const exception &e) {
+      cerr << "Erro ao analisar ROOT_ID: " << e.what() << endl;
       rootNodeId = 0; // Fallback: considera que não há raiz se houver erro.
     }
   } else {
@@ -45,13 +49,13 @@ BPlusTree::BPlusTree(int order, const std::string &indexFileName,
   }
 
   // Tenta ler o contador do próximo ID de nó do arquivo de índice.
-  std::string nextIdLine = readLineFromFile(indexFilePath, 2);
+  string nextIdLine = readLineFromFile(indexFilePath, 2);
   if (!nextIdLine.empty() && nextIdLine.rfind("NEXT_NODE_ID:", 0) == 0) {
     try {
-      nextNodeIdCounter =
-          std::stoi(nextIdLine.substr(15)); // Extrai o ID após "NEXT_NODE_ID:"
-    } catch (const std::exception &e) {
-      std::cerr << "Erro ao analisar NEXT_NODE_ID: " << e.what() << std::endl;
+      nextNodeIdCounter = stoi(nextIdLine.substr(13)); // Extrai o ID após "NEXT_NODE_ID:"
+      cout << "nextNodeIdCounter: " << nextNodeIdCounter << endl;
+    } catch (const exception &e) {
+      cerr << "Erro ao analisar NEXT_NODE_ID: " << e.what() << endl;
       nextNodeIdCounter = 1; // Fallback: começa em 1 se houver erro.
     }
   } else {
@@ -75,19 +79,19 @@ BPlusTree::~BPlusTree() {
   currentIndexNodeInRam = nullptr;
 
   // Lê todas as linhas do arquivo de índice para atualizar o cabeçalho.
-  std::vector<std::string> lines;
-  std::ifstream inFile(indexFilePath);
-  std::string currentLine;
+  vector<string> lines;
+  ifstream inFile(indexFilePath);
+  string currentLine;
   if (inFile.is_open()) {
-    while (std::getline(inFile, currentLine)) {
+    while (getline(inFile, currentLine)) {
       lines.push_back(currentLine);
     }
     inFile.close();
   }
 
   // Prepara as strings de cabeçalho atualizadas.
-  std::string rootStr = "ROOT_ID:" + std::to_string(rootNodeId);
-  std::string nextIdStr = "NEXT_NODE_ID:" + std::to_string(nextNodeIdCounter);
+  string rootStr = "ROOT_ID:" + to_string(rootNodeId);
+  string nextIdStr = "NEXT_NODE_ID:" + to_string(nextNodeIdCounter);
 
   // Atualiza ou adiciona as linhas de cabeçalho.
   if (lines.size() >= 2) {
@@ -102,16 +106,16 @@ BPlusTree::~BPlusTree() {
   }
 
   // Escreve todas as linhas de volta no arquivo de índice, sobrescrevendo-o.
-  std::ofstream outFile(indexFilePath, std::ios::trunc);
+  ofstream outFile(indexFilePath, ios::trunc);
   if (outFile.is_open()) {
     for (const auto &l : lines) {
-      outFile << l << std::endl;
+      outFile << l << endl;
     }
     outFile.close();
   } else {
-    std::cerr << "Erro: Não foi possível abrir o arquivo de índice "
+    cerr << "Erro: Não foi possível abrir o arquivo de índice "
               << indexFilePath << " para salvar root/next ID no destrutor."
-              << std::endl;
+              << endl;
   }
 }
 
@@ -121,11 +125,11 @@ BPlusTree::~BPlusTree() {
  * e NEXT_NODE_ID (inicializado como 1).
  */
 void BPlusTree::initializeIndexFile() {
-  std::ifstream fileCheck(indexFilePath);
+  ifstream fileCheck(indexFilePath);
   bool fileExists = fileCheck.good();
   long fileSize = 0;
   if (fileExists) {
-    fileCheck.seekg(0, std::ios::end);
+    fileCheck.seekg(0, ios::end);
     fileSize = fileCheck.tellg();
     fileCheck.close(); // Fecha o arquivo após obter o tamanho.
   } else {
@@ -134,8 +138,8 @@ void BPlusTree::initializeIndexFile() {
   }
 
   if (!fileExists || fileSize == 0) {
-    std::ofstream file(indexFilePath,
-                       std::ios::trunc); // Cria/sobrescreve o arquivo.
+    ofstream file(indexFilePath,
+                       ios::trunc); // Cria/sobrescreve o arquivo.
     if (file.is_open()) {
       file << "ROOT_ID:0\n";      // Raiz inicialmente 0 (árvore vazia).
       file << "NEXT_NODE_ID:1\n"; // Próximo ID de nó começa em 1.
@@ -143,9 +147,9 @@ void BPlusTree::initializeIndexFile() {
       rootNodeId = 0; // Atualiza o estado interno.
       nextNodeIdCounter = 1;
     } else {
-      std::cerr
+      cerr
           << "Erro: Não foi possível criar ou inicializar o arquivo de índice: "
-          << indexFilePath << std::endl;
+          << indexFilePath << endl;
     }
   }
 }
@@ -233,7 +237,7 @@ Node *BPlusTree::createNewBufferedNode(bool isLeaf) {
  * contendo o registro de dados, ou string vazia se o recordLineNumber for 0 ou
  * o registro não puder ser lido.
  */
-std::string BPlusTree::accessDataRecord(int recordLineNumber) {
+string BPlusTree::accessDataRecord(int recordLineNumber) {
   if (recordLineNumber == 0)
     return ""; // Número de linha 0 é inválido.
 
@@ -261,19 +265,19 @@ std::string BPlusTree::accessDataRecord(int recordLineNumber) {
  * retorna String contendo a linha lida, ou string vazia se o arquivo não puder
  * ser aberto ou a linha não existir.
  */
-std::string BPlusTree::readLineFromFile(const std::string &filePath,
+string BPlusTree::readLineFromFile(const string &filePath,
                                         int lineNumber) {
-  std::ifstream file(filePath);
-  std::string lineContent;
+  ifstream file(filePath);
+  string lineContent;
   if (!file.is_open()) {
-    // std::cerr << "Debug: Não foi possível abrir o arquivo para leitura: " <<
-    // filePath << std::endl;
+    // cerr << "Debug: Não foi possível abrir o arquivo para leitura: " <<
+    // filePath << endl;
     return "";
   }
   for (int i = 1; i <= lineNumber; ++i) {
-    if (!std::getline(file, lineContent)) {
-      // std::cerr << "Debug: Falha ao ler a linha " << lineNumber << " de " <<
-      // filePath << std::endl;
+    if (!getline(file, lineContent)) {
+      // cerr << "Debug: Falha ao ler a linha " << lineNumber << " de " <<
+      // filePath << endl;
       file.close();
       return "";
     }
@@ -289,16 +293,16 @@ std::string BPlusTree::readLineFromFile(const std::string &filePath,
  * arquivo. targetLineNumber O número da linha (1-based) onde o conteúdo deve
  * ser escrito. content A string a ser escrita na linha.
  */
-void BPlusTree::writeLineToFile(const std::string &filePath,
+void BPlusTree::writeLineToFile(const string &filePath,
                                 int targetLineNumber,
-                                const std::string &content) {
-  std::vector<std::string> allLines;
-  std::ifstream inFile(filePath);
-  std::string currentLineText;
+                                const string &content) {
+  vector<string> allLines;
+  ifstream inFile(filePath);
+  string currentLineText;
 
   // Lê todas as linhas existentes do arquivo.
   if (inFile.is_open()) {
-    while (std::getline(inFile, currentLineText)) {
+    while (getline(inFile, currentLineText)) {
       allLines.push_back(currentLineText);
     }
     inFile.close();
@@ -314,7 +318,7 @@ void BPlusTree::writeLineToFile(const std::string &filePath,
   allLines[targetLineNumber - 1] = content; // Define o conteúdo da linha alvo.
 
   // Escreve todas as linhas de volta no arquivo, sobrescrevendo-o.
-  std::ofstream outFile(filePath, std::ios::trunc);
+  ofstream outFile(filePath, ios::trunc);
   if (outFile.is_open()) {
     for (size_t i = 0; i < allLines.size(); ++i) {
       // Evita adicionar uma nova linha extra se a última linha for vazia e for
@@ -327,9 +331,9 @@ void BPlusTree::writeLineToFile(const std::string &filePath,
     }
     outFile.close();
   } else {
-    std::cerr
+    cerr
         << "Erro: Não foi possível abrir o arquivo para escrever a linha: "
-        << filePath << std::endl;
+        << filePath << endl;
   }
 }
 
@@ -339,24 +343,22 @@ void BPlusTree::writeLineToFile(const std::string &filePath,
  * retorna O número de linhas no arquivo, ou 0 se o arquivo não puder ser
  * aberto.
  */
-int BPlusTree::countLinesInFile(const std::string &filePath) {
-  std::ifstream file(filePath);
+int BPlusTree::countLinesInFile(const string &filePath) {
+  ifstream file(filePath);
   if (!file.is_open())
     return 0;
   int lineCount = 0;
-  std::string lineText;
-  while (std::getline(file, lineText)) {
+  string lineText;
+  while (getline(file, lineText)) {
     lineCount++;
   }
   file.close();
   return lineCount;
-}
+} 
 
 /**
  *  Carrega um nó do arquivo de índice a partir do seu ID (número da linha).
- * A linha lida do arquivo é então passada para `parseNodeString` para criar o
- * objeto Node. nodeIdToLoad O ID do nó a ser carregado. retorna ponteiro para o
- * objeto Node carregado, ou nullptr se o ID for 0, a linha estiver vazia ou
+ * A linha lida do arquivo é então passada para `parseNodeString` * objeto Node carregado, ou nullptr se o ID for 0, a linha estiver vazia ou
  * houver erro no parsing.
  */
 Node *BPlusTree::loadNodeFromFile(int nodeIdToLoad) {
@@ -364,11 +366,11 @@ Node *BPlusTree::loadNodeFromFile(int nodeIdToLoad) {
     return nullptr;
   // Os IDs dos nós no arquivo de índice são armazenados após as linhas de
   // cabeçalho.
-  std::string nodeString =
+  string nodeString =
       readLineFromFile(indexFilePath, nodeIdToLoad + HEADER_LINES);
   if (nodeString.empty()) {
-    // std::cerr << "Debug: String vazia ao carregar nó ID " << nodeIdToLoad <<
-    // std::endl;
+    // cerr << "Debug: String vazia ao carregar nó ID " << nodeIdToLoad <<
+    // endl;
     return nullptr;
   }
   return parseNodeString(nodeString, nodeIdToLoad);
@@ -381,11 +383,11 @@ Node *BPlusTree::loadNodeFromFile(int nodeIdToLoad) {
  */
 void BPlusTree::saveNodeToFile(Node *nodeToSave) {
   if (!nodeToSave || nodeToSave->id == 0) {
-    std::cerr << "Erro: Não é possível salvar nó nulo ou nó sem ID."
-              << std::endl;
+    cerr << "Erro: Não é possível salvar nó nulo ou nó sem ID."
+              << endl;
     return;
   }
-  std::string nodeStr = formatNodeString(nodeToSave);
+  string nodeStr = formatNodeString(nodeToSave);
   // Os IDs dos nós no arquivo de índice são armazenados após as linhas de
   // cabeçalho.
   writeLineToFile(indexFilePath, nodeToSave->id + HEADER_LINES, nodeStr);
@@ -401,16 +403,16 @@ void BPlusTree::saveNodeToFile(Node *nodeToSave) {
  * para o objeto Node reconstruído, ou nullptr se a string estiver vazia ou
  * houver erro no parsing.
  */
-Node *BPlusTree::parseNodeString(const std::string &line, int nodeIdFromFile) {
+Node *BPlusTree::parseNodeString(const string &line, int nodeIdFromFile) {
   if (line.empty())
     return nullptr;
-  std::stringstream ss(line);
-  std::string segment;
+  stringstream ss(line);
+  string segment;
   char typeChar;
   int numKeysInString;
 
   // Lê o tipo do nó (L para folha, I para interno).
-  if (!std::getline(ss, segment, ';')) { /*delete currentIndexNodeInRam;
+  if (!getline(ss, segment, ';')) { /*delete currentIndexNodeInRam;
                                             currentIndexNodeInRam = nullptr;*/
     return nullptr;
   }
@@ -423,13 +425,13 @@ Node *BPlusTree::parseNodeString(const std::string &line, int nodeIdFromFile) {
   Node *parsedNode = new Node(treeOrder, (typeChar == 'L'), nodeIdFromFile);
 
   // Lê o número de chaves.
-  if (!std::getline(ss, segment, ';')) {
+  if (!getline(ss, segment, ';')) {
     delete parsedNode;
     return nullptr;
   }
   try {
-    numKeysInString = std::stoi(segment);
-  } catch (const std::exception &) {
+    numKeysInString = stoi(segment);
+  } catch (const exception &) {
     delete parsedNode;
     return nullptr;
   }
@@ -438,13 +440,13 @@ Node *BPlusTree::parseNodeString(const std::string &line, int nodeIdFromFile) {
   // Lê as chaves.
   parsedNode->keys.resize(parsedNode->numKeys);
   for (int i = 0; i < parsedNode->numKeys; ++i) {
-    if (!std::getline(ss, segment, ';')) {
+    if (!getline(ss, segment, ';')) {
       delete parsedNode;
       return nullptr;
     }
     try {
-      parsedNode->keys[i] = std::stoi(segment);
-    } catch (const std::exception &) {
+      parsedNode->keys[i] = stoi(segment);
+    } catch (const exception &) {
       delete parsedNode;
       return nullptr;
     }
@@ -454,36 +456,36 @@ Node *BPlusTree::parseNodeString(const std::string &line, int nodeIdFromFile) {
     // Se for folha, lê os ponteiros de dados.
     parsedNode->dataPointers.resize(parsedNode->numKeys);
     for (int i = 0; i < parsedNode->numKeys; ++i) {
-      if (!std::getline(ss, segment, ';')) {
+      if (!getline(ss, segment, ';')) {
         delete parsedNode;
         return nullptr;
       }
       try {
-        parsedNode->dataPointers[i] = std::stoi(segment);
-      } catch (const std::exception &) {
+        parsedNode->dataPointers[i] = stoi(segment);
+      } catch (const exception &) {
         delete parsedNode;
         return nullptr;
       }
     }
     // Lê os IDs dos nós folha vizinhos (anterior e próximo).
-    if (!std::getline(ss, segment, ';')) {
+    if (!getline(ss, segment, ';')) {
       delete parsedNode;
       return nullptr;
     }
     try {
-      parsedNode->prevLeafId = std::stoi(segment);
-    } catch (const std::exception &) {
+      parsedNode->prevLeafId = stoi(segment);
+    } catch (const exception &) {
       delete parsedNode;
       return nullptr;
     }
 
-    if (!std::getline(ss, segment, ';')) {
+    if (!getline(ss, segment, ';')) {
       delete parsedNode;
       return nullptr;
     }
     try {
-      parsedNode->nextLeafId = std::stoi(segment);
-    } catch (const std::exception &) {
+      parsedNode->nextLeafId = stoi(segment);
+    } catch (const exception &) {
       delete parsedNode;
       return nullptr;
     }
@@ -492,13 +494,13 @@ Node *BPlusTree::parseNodeString(const std::string &line, int nodeIdFromFile) {
     int numChildren = parsedNode->numKeys + 1;
     parsedNode->childNodeIds.resize(numChildren);
     for (int i = 0; i < numChildren; ++i) {
-      if (!std::getline(ss, segment, ';')) {
+      if (!getline(ss, segment, ';')) {
         delete parsedNode;
         return nullptr;
       }
       try {
-        parsedNode->childNodeIds[i] = std::stoi(segment);
-      } catch (const std::exception &) {
+        parsedNode->childNodeIds[i] = stoi(segment);
+      } catch (const exception &) {
         delete parsedNode;
         return nullptr;
       }
@@ -513,10 +515,10 @@ Node *BPlusTree::parseNodeString(const std::string &line, int nodeIdFromFile) {
  * Ponteiro para o objeto Node a ser formatado. retorna String contendo a
  * representação formatada do nó, ou string vazia se o nó for nulo.
  */
-std::string BPlusTree::formatNodeString(Node *node) {
+string BPlusTree::formatNodeString(Node *node) {
   if (!node)
     return "";
-  std::stringstream ss;
+  stringstream ss;
   ss << (node->isLeaf ? 'L' : 'I') << ";";
   ss << node->numKeys << ";";
   for (int i = 0; i < node->numKeys; ++i) {
@@ -559,22 +561,22 @@ void BPlusTree::insert(int key, int dataRecordId) {
     return;
   }
 
-  std::vector<int>
+  vector<int>
       pathNodeIds; // Vetor para armazenar o caminho da raiz até a folha.
   int leafNodeId = findLeafNodeIdToInsert(
       key, pathNodeIds); // Encontra o ID da folha para inserção.
 
   if (leafNodeId == 0) {
-    std::cerr
+    cerr
         << "Erro: Não foi possível encontrar o ID do nó folha para inserção."
-        << std::endl;
+        << endl;
     return;
   }
 
   Node *leafNode = accessNode(leafNodeId); // Carrega a folha para o buffer.
   if (!leafNode) {
-    std::cerr << "Erro: Não foi possível acessar o ID do nó folha "
-              << leafNodeId << " para inserção." << std::endl;
+    cerr << "Erro: Não foi possível acessar o ID do nó folha "
+              << leafNodeId << " para inserção." << endl;
     return;
   }
 
@@ -596,7 +598,7 @@ void BPlusTree::insert(int key, int dataRecordId) {
  * folha. retorna O ID do nó folha encontrado, ou 0 se a árvore estiver vazia ou
  * ocorrer um erro.
  */
-int BPlusTree::findLeafNodeIdToInsert(int key, std::vector<int> &pathNodeIds) {
+int BPlusTree::findLeafNodeIdToInsert(int key, vector<int> &pathNodeIds) {
   pathNodeIds.clear();
   if (rootNodeId == 0)
     return 0; // Árvore vazia.
@@ -610,16 +612,16 @@ int BPlusTree::findLeafNodeIdToInsert(int key, std::vector<int> &pathNodeIds) {
   while (tempNode != nullptr && !tempNode->isLeaf) {
     // Encontra o ponteiro para o filho correto usando lower_bound nas chaves do
     // nó interno.
-    auto it = std::lower_bound(tempNode->keys.begin(),
+    auto it = lower_bound(tempNode->keys.begin(),
                                tempNode->keys.begin() + tempNode->numKeys, key);
-    int childIdx = std::distance(tempNode->keys.begin(), it);
+    int childIdx = distance(tempNode->keys.begin(), it);
 
     // Validação do índice do filho.
     if (childIdx >= static_cast<int>(tempNode->childNodeIds.size()) ||
         tempNode->childNodeIds[childIdx] == 0) {
-      std::cerr
+      cerr
           << "Erro: Índice de filho inválido ou ID de filho nulo no nó interno "
-          << tempNode->id << std::endl;
+          << tempNode->id << endl;
       return 0;
     }
     currentNodeId = tempNode->childNodeIds[childIdx]; // Move para o filho.
@@ -642,16 +644,15 @@ void BPlusTree::insertIntoLeafNonFull(int leafNodeId, int key,
                                       int dataRecordId) {
   Node *leaf = accessNode(leafNodeId); // Carrega a folha para o buffer.
   if (!leaf || !leaf->isLeaf || leaf->isFull()) {
-    std::cerr << "Erro: Não é possível inserir em nó não folha, folha cheia ou "
+    cerr << "Erro: Não é possível inserir em nó não folha, folha cheia ou "
                  "folha nula."
-              << std::endl;
+              << endl;
     return;
   }
 
   // Encontra a posição correta para inserir a nova chave, mantendo a ordem.
-  auto it = std::lower_bound(leaf->keys.begin(),
-                             leaf->keys.begin() + leaf->numKeys, key);
-  int insertPos = std::distance(leaf->keys.begin(), it);
+  auto it = lower_bound(leaf->keys.begin(), leaf->keys.begin() + leaf->numKeys, key);
+  int insertPos = distance(leaf->keys.begin(), it);
 
   // Insere a chave e o ponteiro de dados.
   leaf->keys.insert(leaf->keys.begin() + insertPos, key);
@@ -673,7 +674,7 @@ void BPlusTree::insertIntoLeafNonFull(int leafNodeId, int key,
  */
 void BPlusTree::splitAndInsertLeaf(int leafNodeId, int keyToInsert,
                                    int dataPtrToInsert,
-                                   std::vector<int> &pathNodeIds) {
+                                   vector<int> &pathNodeIds) {
   Node *leaf =
       accessNode(leafNodeId); // Carrega a folha original para o buffer.
   if (!leaf)
@@ -681,10 +682,10 @@ void BPlusTree::splitAndInsertLeaf(int leafNodeId, int keyToInsert,
 
   // Cria vetores temporários com todas as chaves e ponteiros (incluindo o novo
   // par).
-  std::vector<int> tempKeys = leaf->keys;
-  std::vector<int> tempDataPointers = leaf->dataPointers;
-  auto it_k = std::lower_bound(tempKeys.begin(), tempKeys.end(), keyToInsert);
-  int insertPos = std::distance(tempKeys.begin(), it_k);
+  vector<int> tempKeys = leaf->keys;
+  vector<int> tempDataPointers = leaf->dataPointers;
+  auto it_k = lower_bound(tempKeys.begin(), tempKeys.end(), keyToInsert);
+  int insertPos = distance(tempKeys.begin(), it_k);
   tempKeys.insert(tempKeys.begin() + insertPos, keyToInsert);
   tempDataPointers.insert(tempDataPointers.begin() + insertPos,
                           dataPtrToInsert);
@@ -701,7 +702,7 @@ void BPlusTree::splitAndInsertLeaf(int leafNodeId, int keyToInsert,
   }
 
   // Calcula quantos itens vão para cada nó após a divisão.
-  int numItemsInNewLeaf = std::ceil(static_cast<double>(tempKeys.size()) / 2.0);
+  int numItemsInNewLeaf = ceil(static_cast<double>(tempKeys.size()) / 2.0);
   int numItemsInOldLeaf = tempKeys.size() - numItemsInNewLeaf;
 
   // Atualiza o nó folha original (nó da esquerda).
@@ -766,7 +767,7 @@ void BPlusTree::splitAndInsertLeaf(int leafNodeId, int keyToInsert,
  */
 void BPlusTree::insertIntoParent(int oldChildNodeId, int keyToPushUp,
                                  int newChildNodeId,
-                                 std::vector<int> &pathNodeIds) {
+                                 vector<int> &pathNodeIds) {
   // Se pathNodeIds está vazio, significa que o nó dividido era a raiz, ou o pai
   // da folha dividida era a raiz. Neste caso, uma nova raiz precisa ser criada.
   if (pathNodeIds.empty()) {
@@ -779,16 +780,15 @@ void BPlusTree::insertIntoParent(int oldChildNodeId, int keyToPushUp,
                           // recursiva, se houver.
   Node *parent = accessNode(parentNodeId); // Carrega o pai para o buffer.
   if (!parent) {
-    std::cerr << "Erro: Não foi possível acessar o ID do nó pai "
-              << parentNodeId << std::endl;
+    cerr << "Erro: Não foi possível acessar o ID do nó pai "
+              << parentNodeId << endl;
     return;
   }
 
   // Encontra a posição correta para inserir a chave promovida no nó pai.
-  auto it =
-      std::lower_bound(parent->keys.begin(),
-                       parent->keys.begin() + parent->numKeys, keyToPushUp);
-  int insertPos = std::distance(parent->keys.begin(), it);
+  auto it = lower_bound(parent->keys.begin(),
+parent->keys.begin() + parent->numKeys, keyToPushUp);
+  int insertPos = distance(parent->keys.begin(), it);
 
   // Se o pai não está cheio, insere a chave e o novo filho.
   if (parent->numKeys < treeOrder - 1) {
@@ -800,8 +800,8 @@ void BPlusTree::insertIntoParent(int oldChildNodeId, int keyToPushUp,
   } else { // O pai está cheio, precisa ser dividido.
     // Cria vetores temporários com todas as chaves e filhos (incluindo o novo
     // par).
-    std::vector<int> tempKeys = parent->keys;
-    std::vector<int> tempChildren = parent->childNodeIds;
+    vector<int> tempKeys = parent->keys;
+    vector<int> tempChildren = parent->childNodeIds;
     tempKeys.insert(tempKeys.begin() + insertPos, keyToPushUp);
     tempChildren.insert(tempChildren.begin() + insertPos + 1, newChildNodeId);
 
@@ -877,12 +877,12 @@ void BPlusTree::createNewRootAndUpdate(int oldLeftChildId, int key,
  * vinhos.csv) associados à chave. retorna um vetor vazio se a chave não for
  * encontrada ou a árvore estiver vazia.
  */
-std::vector<int> BPlusTree::search(int key) {
-  std::vector<int> resultRecordIds;
+vector<int> BPlusTree::search(int key) {
+  vector<int> resultRecordIds;
   if (rootNodeId == 0)
     return resultRecordIds; // Árvore vazia.
 
-  std::vector<int>
+  vector<int>
       path; // Não usado aqui, mas findLeafNodeIdToInsert o preenche.
   int leafNodeId = findLeafNodeIdToInsert(
       key, path); // Encontra a folha onde a chave deveria estar.
@@ -894,9 +894,9 @@ std::vector<int> BPlusTree::search(int key) {
     return resultRecordIds;
 
   // Procura a chave na folha.
-  auto it = std::lower_bound(leafNode->keys.begin(),
+  auto it = lower_bound(leafNode->keys.begin(),
                              leafNode->keys.begin() + leafNode->numKeys, key);
-  int keyPos = std::distance(leafNode->keys.begin(), it);
+  int keyPos = distance(leafNode->keys.begin(), it);
 
   // Itera pela folha e pelas folhas seguintes (se necessário) para coletar
   // todos os dataPointers da chave.
@@ -933,15 +933,15 @@ std::vector<int> BPlusTree::search(int key) {
  * gerencia o buffer de nó para não interferir na impressão
  */
 void BPlusTree::printTreeForDebug() {
-  std::cout << "Estrutura da Árvore B+ (Ordem: " << treeOrder << ")"
-            << std::endl;
+  cout << "Estrutura da Árvore B+ (Ordem: " << treeOrder << ")"
+            << endl;
   if (rootNodeId == 0) {
-    std::cout << "  Árvore está vazia." << std::endl;
+    cout << "  Árvore está vazia." << endl;
     return;
   }
-  std::cout << "  ID do Nó Raiz: " << rootNodeId << std::endl;
-  std::cout << "  Contador do Próximo ID de Nó para novos nós: "
-            << nextNodeIdCounter << std::endl;
+  cout << "  ID do Nó Raiz: " << rootNodeId << endl;
+  cout << "  Contador do Próximo ID de Nó para novos nós: "
+            << nextNodeIdCounter << endl;
 
   // salva o estado do buffer de nó atual para restaurá-lo após a impressão
   Node *tempSavedNode = nullptr;
@@ -993,32 +993,32 @@ void BPlusTree::printNodeRecursive(int nodeIdToPrint, int level) {
     return;
   Node *node = accessNode(nodeIdToPrint); // carrega o nó para o buffer
   if (!node) {
-    std::cout << std::string(level * 2, ' ')
+    cout << string(level * 2, ' ')
               << "[Erro ao carregar Nó ID: " << nodeIdToPrint << "]"
-              << std::endl;
+              << endl;
     return;
   }
 
-  std::cout << std::string(level * 2, ' '); // indentação
-  std::cout << "[" << (node->isLeaf ? 'L' : 'I') << ":" << node->id
+  cout << string(level * 2, ' '); // indentação
+  cout << "[" << (node->isLeaf ? 'L' : 'I') << ":" << node->id
             << "] Chaves: (";
   for (int i = 0; i < node->numKeys; ++i) {
-    std::cout << node->keys[i] << (i == node->numKeys - 1 ? "" : ",");
+    cout << node->keys[i] << (i == node->numKeys - 1 ? "" : ",");
   }
-  std::cout << ")";
+  cout << ")";
 
   if (node->isLeaf) {
-    std::cout << " PonteirosDados: (";
+    cout << " PonteirosDados: (";
     for (int i = 0; i < node->numKeys; ++i) {
-      std::cout << node->dataPointers[i] << (i == node->numKeys - 1 ? "" : ",");
+      cout << node->dataPointers[i] << (i == node->numKeys - 1 ? "" : ",");
     }
-    std::cout << ") Ant: " << node->prevLeafId << " Prox: " << node->nextLeafId;
+    cout << ") Ant: " << node->prevLeafId << " Prox: " << node->nextLeafId;
   }
-  std::cout << std::endl;
+  cout << endl;
 
   // se não for folha, imprime recursivamente os filhos
   if (!node->isLeaf) {
-    std::vector<int> children = node->childNodeIds;
+    vector<int> children = node->childNodeIds;
     for (int child_id : children) {
       if (child_id !=
           0) { // add verificação para não tentar imprimir filho com ID 0

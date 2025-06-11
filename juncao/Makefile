@@ -1,7 +1,7 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -O2
 
-SRCS = main.cpp tabela.cpp 
+SRCS = main.cpp Tabela.cpp Pagina.cpp Tupla.cpp
 OBJDIR = obj
 OBJS = $(SRCS:%.cpp=$(OBJDIR)/%.o)
 TARGET = main

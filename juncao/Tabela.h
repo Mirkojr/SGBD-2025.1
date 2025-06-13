@@ -19,6 +19,7 @@ public:
 
     void carregarDados();
     void imprimir() const;
+    void salvarPaginas(const string& nomeArquivo) const;
 };
 
 #endif // TABELA_H

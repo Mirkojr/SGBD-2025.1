@@ -1,7 +1,7 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -O2
 
-SRCS = main.cpp Tabela.cpp Pagina.cpp Tupla.cpp Operador.cpp
+SRCS = main.cpp tabela.cpp pagina.cpp tupla.cpp utils.cpp
 OBJDIR = obj
 OBJS = $(SRCS:%.cpp=$(OBJDIR)/%.o)
 TARGET = main
@@ -22,4 +22,3 @@ run: $(TARGET)
 
 clean:
 	rm -rf $(OBJDIR) $(TARGET)
-	rm -rf paginas* 

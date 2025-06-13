@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <iomanip>
 
 Tabela::Tabela(const string& nomeArquivo) {
     this->nomeArquivo = nomeArquivo;
@@ -26,18 +27,12 @@ void Tabela::carregarDados() {
     // Lê o cabeçalho
     vector<string> colunas;
     if (getline(arquivo, linha)) {
-        // cout << "Lendo cabeçalho: " << linha << endl;
 
         stringstream ss(linha);
         string coluna;
         while (getline(ss, coluna, ',')) {
             colunas.push_back(coluna);
         }
-
-        // cout << "Colunas encontradas: ";
-        // for (const auto& col : colunas) {
-        //     cout << col << " " << endl;
-        // }
 
         qtd_cols = colunas.size();
     }
@@ -48,7 +43,6 @@ void Tabela::carregarDados() {
     int linhas_na_pagina = 0;
 
     while (getline(arquivo, linha)) {
-        // cout << "Lendo linha: " << linha << endl;
         stringstream ss(linha);
         string valor;
         vector<string> linhaDados;
@@ -57,7 +51,7 @@ void Tabela::carregarDados() {
             linhaDados.push_back(valor);
         }
         if (!linhaDados.empty()) {
-            Tupla tupla(linhaDados); // Supondo que Tupla tem um construtor que aceita vector<string>
+            Tupla tupla(linhaDados); 
             paginaAtual.adicionarTupla(tupla);
             linhas_na_pagina++;
         }
@@ -84,5 +78,38 @@ void Tabela::imprimir() const {
         for (int i = 0; i < pagina.qtd_tuplas_ocup; ++i) {
             pagina.tuplas[i].imprimir();
         }
+    }
+}
+
+void Tabela::salvarPaginas(const string& pasta) const {
+    // Cria a pasta se não existir
+    string comando = "mkdir -p " + pasta;
+    if (system(comando.c_str()) != 0) {
+        cerr << "Erro ao criar a pasta: " << pasta << endl;
+        return;
+    }
+
+    for (size_t i = 0; i < pags.size(); ++i) {
+        // Nome do arquivo da página
+        ostringstream nomeArquivoPagina;
+        nomeArquivoPagina << pasta << "/pagina_" << setfill('0') << setw(2) << (i + 1) << ".csv";
+        ofstream arquivoPagina(nomeArquivoPagina.str());
+        if (!arquivoPagina.is_open()) {
+            cerr << "Erro ao criar arquivo: " << nomeArquivoPagina.str() << endl;
+            continue;
+        }
+
+        // Escreve as tuplas da página
+        const Pagina& pagina = pags[i];
+        for (int j = 0; j < pagina.qtd_tuplas_ocup; ++j) {
+            const Tupla& tupla = pagina.tuplas[j];
+            for (size_t k = 0; k < tupla.cols.size(); ++k) {
+                arquivoPagina << tupla.cols[k];
+                if (k < tupla.cols.size() - 1)
+                    arquivoPagina << ",";
+            }
+            arquivoPagina << "\n";
+        }
+        arquivoPagina.close();
     }
 }

@@ -137,7 +137,11 @@ int main() {
                 }
             } else if (op_type == 'c') { // Commit
                 t_id = op.substr(1);
-                // Não faz nada além de registrar momento
+                // Reinicializa os timestamps dos dados acessados por esta transação
+               for (auto& [data_item, info] : data_table) {
+                    info.ts_read = -1;
+                    info.ts_write = -1;
+                }
                 moment++;
                 continue;
             } else {
